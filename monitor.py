@@ -41,6 +41,38 @@ def _get_active_display_info():
     return info
 
 
+def _refresh_adapter_luids(paths, num_paths, modes, num_modes):
+    """Update stale adapter LUIDs in saved config using current system LUIDs."""
+    current = winapi.query_display_config()
+    if not current:
+        return
+    cur_paths, _, cur_np, _ = current
+
+    # Map old LUID -> new LUID by matching target IDs (persistent across reboots)
+    luid_map = {}
+    for i in range(num_paths):
+        old = paths[i].targetInfo.adapterId
+        old_key = (old.LowPart, old.HighPart)
+        if old_key in luid_map:
+            continue
+        for j in range(cur_np):
+            if cur_paths[j].targetInfo.id == paths[i].targetInfo.id:
+                new = cur_paths[j].targetInfo.adapterId
+                luid_map[old_key] = (new.LowPart, new.HighPart)
+                break
+
+    def _update(luid):
+        key = (luid.LowPart, luid.HighPart)
+        if key in luid_map:
+            luid.LowPart, luid.HighPart = luid_map[key]
+
+    for i in range(num_paths):
+        _update(paths[i].sourceInfo.adapterId)
+        _update(paths[i].targetInfo.adapterId)
+    for i in range(num_modes):
+        _update(modes[i].adapterId)
+
+
 # --- Commands ---
 
 def cmd_show():
@@ -119,6 +151,8 @@ def cmd_apply(name):
 
     modes = (winapi.DISPLAYCONFIG_MODE_INFO * num_modes)()
     ctypes.memmove(modes, modes_bytes, len(modes_bytes))
+
+    _refresh_adapter_luids(paths, num_paths, modes, num_modes)
 
     flags = (winapi.SDC_APPLY | winapi.SDC_USE_SUPPLIED_DISPLAY_CONFIG
              | winapi.SDC_ALLOW_CHANGES | winapi.SDC_SAVE_TO_DATABASE)
