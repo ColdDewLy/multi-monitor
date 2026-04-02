@@ -48,15 +48,18 @@ def _refresh_adapter_luids(paths, num_paths, modes, num_modes):
         return
     cur_paths, _, cur_np, _ = current
 
-    # Map old LUID -> new LUID by matching target IDs (persistent across reboots)
+    # Map old LUID -> new LUID by matching the full path identity.
+    # target IDs can repeat across adapters, so target ID alone is ambiguous.
     luid_map = {}
     for i in range(num_paths):
         old = paths[i].targetInfo.adapterId
         old_key = (old.LowPart, old.HighPart)
         if old_key in luid_map:
             continue
+        path_key = (paths[i].sourceInfo.id, paths[i].targetInfo.id)
         for j in range(cur_np):
-            if cur_paths[j].targetInfo.id == paths[i].targetInfo.id:
+            cur_key = (cur_paths[j].sourceInfo.id, cur_paths[j].targetInfo.id)
+            if cur_key == path_key:
                 new = cur_paths[j].targetInfo.adapterId
                 luid_map[old_key] = (new.LowPart, new.HighPart)
                 break
